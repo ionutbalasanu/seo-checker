@@ -87,11 +87,22 @@ final class HttpClient
         return null;
     }
 
-    /** Heuristic JS-heavy (ai deja în proiect; păstrează ce aveai) */
+    /** Heuristic JS-heavy */
     public static function detectJsHeavy(string $html): array {
-        $scripts = substr_count($html, '<script');
-        $textLen = strlen(strip_tags($html));
-        $heavy   = ($scripts > 40 && $textLen < 10000);
-        return ['heavy'=>$heavy,'metrics'=>['scriptCount'=>$scripts,'textLen'=>$textLen,'textRatio'=>$textLen>0? $textLen/max(1,strlen($html)) : 0]];
+        $scripts  = substr_count($html, '<script');
+        $textLen  = strlen(strip_tags($html));
+        $totalLen = strlen($html);
+
+        $heavy = ($scripts > 40 && $textLen < 10000);
+        $textRatio = $totalLen > 0 ? $textLen / $totalLen : 0.0;
+
+        return [
+            'heavy'   => $heavy,
+            'metrics' => [
+                'scriptCount' => $scripts,
+                'textLen'     => $textLen,
+                'textRatio'   => $textRatio,
+            ],
+        ];
     }
 }

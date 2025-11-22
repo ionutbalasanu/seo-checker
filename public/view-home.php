@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <title>SEO Checker — Novaweb</title>
+  <title>Novaweb Audit SEO One-Page</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -80,6 +80,16 @@
     background: rgba(239, 68, 68, 0.08);
     border-color: rgba(239, 68, 68, 0.25);
     color: #991b1b;
+  }
+
+  .kv-label-main {
+    display: block;
+  }
+
+  .kv-req {
+    display: block;
+    font-size: 10px;
+    color: #6b7280;
   }
 
   .pill {
@@ -702,7 +712,7 @@
 
         <div class="d-flex align-items-center gap-2">
           <div class="type-toggle" role="radiogroup" aria-label="Tip pagină">
-            <button type="button" class="toggle-pill active" data-type="article">Articol obișnuit</button>
+            <button type="button" class="toggle-pill active" data-type="article">Articol general</button>
             <button type="button" class="toggle-pill" data-type="local">Pagină locală</button>
           </div>
         </div>
@@ -803,18 +813,29 @@
       return `<span class="pill neutral">–</span>`;
     }
 
-    function row(label, state, note) {
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>\"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[m]));
+    }
+
+    function row(label, state, note, requirement) {
       const base = state === true ? 'kv kv-ok' : (state === false ? 'kv kv-bad' : 'kv kv-warn');
+      const reqHtml = requirement
+        ? `<div class="kv-req">* ${escapeHtml(requirement)}</div>`
+        : '';
       return `<div class="${base}">
-      <div>${label}${note ? ` <span class="note">— ${escapeHtml(note)}</span>` : ''}</div>
-      <div>${icon(state)}</div>
-    </div>`;
+        <div>
+          <div class="kv-label-main">${label}${note ? ` <span class="note">— ${escapeHtml(note)}</span>` : ''}</div>
+          ${reqHtml}
+        </div>
+        <div>${icon(state)}</div>
+      </div>`;
     }
 
     function get(checks, id) { return checks.find(x => x.id === id) || null; }
     function stateOf(checks, id) { const it = get(checks, id); return it ? (!!it.ok) : null; }
     function noteOf(checks, id) { const it = get(checks, id); return it && it.note ? it.note : ''; }
-    function escapeHtml(s) { return String(s ?? '').replace(/[&<>\"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m])); }
 
     /* ------- Donut modern (gradient + animație) ------- */
     function donut(score, pass, warn, fail) {
@@ -1047,12 +1068,12 @@
           <div class="info-left">
             Tip pagină: <strong>${context === 'local'
           ? 'Pagină locală (SEO local activ în scor)'
-          : 'Articol obișnuit (SEO local doar informativ)'}</strong>${localBadgeInline}
+          : 'Articol general (SEO local doar informativ)'}</strong>${localBadgeInline}
             · <a href="#" id="openScoreModal" class="score-link">Află cum calculăm scorul</a>
           </div>
           <a href="https://novaweb.ro" target="_blank" rel="noopener" class="novaweb-badge">
             <span class="novaweb-dot"></span>
-            Novaweb SEO Checker
+            Novaweb Audit SEO
           </a>
         </div>
       </div>
@@ -1078,22 +1099,22 @@
           <div class="fs-5 fw-semibold mb-2">${b.content ?? 0}/40</div>
 
           <div class="impact-title impact-high">Impact mare</div>
-          ${row('Cuvinte ≥ 800', stateOf(checks, 'word_count_800'), noteOf(checks, 'word_count_800'))}
-          ${row('H1 unic', stateOf(checks, 'h1_single'), noteOf(checks, 'h1_single'))}
-          ${row('Ierarhie H2/H3 bună', stateOf(checks, 'headings_hierarchy'), noteOf(checks, 'headings_hierarchy'))}
-          ${row('Imagini în corp', stateOf(checks, 'images_in_body'), noteOf(checks, 'images_in_body'))}
-          ${row('ALT ≥ 80%', stateOf(checks, 'img_alt_ratio_80'), noteOf(checks, 'img_alt_ratio_80'))}
+          ${row('Dimensiune text', stateOf(checks, 'word_count_800'), noteOf(checks, 'word_count_800'), 'Recomandat: cel puțin 800 de cuvinte în articol.')}
+          ${row('Titlu principal (H1) unic', stateOf(checks, 'h1_single'), noteOf(checks, 'h1_single'), 'Recomandat: un singur H1 pe pagină.')}
+          ${row('Structură subtitluri (H2/H3)', stateOf(checks, 'headings_hierarchy'), noteOf(checks, 'headings_hierarchy'), 'Recomandat: cel puțin 3 H2/H3 în ordine logică, fără sărit niveluri.')}
+          ${row('Imagini în conținut', stateOf(checks, 'images_in_body'), noteOf(checks, 'images_in_body'), 'Recomandat: cel puțin 1 imagine relevantă în corpul articolului.')}
+          ${row('Texte alternative (ALT)', stateOf(checks, 'img_alt_ratio_80'), noteOf(checks, 'img_alt_ratio_80'), 'Recomandat: ≥ 80% dintre imaginile de conținut să aibă ALT descriptiv.')}
 
           <div class="impact-title impact-medium">Impact mediu</div>
-          ${row('Intro menționează tema', stateOf(checks, 'intro_mentions_topic'), noteOf(checks, 'intro_mentions_topic'))}
-          ${row('Liste/Tabele în conținut', stateOf(checks, 'lists_tables'), noteOf(checks, 'lists_tables'))}
-          ${row('Lazy-load la imagini', stateOf(checks, 'lazyload_images'), noteOf(checks, 'lazyload_images'))}
-          ${row('Video/Iframe prezent', stateOf(checks, 'video_present'), '')}
+          ${row('Termen principal în introducere', stateOf(checks, 'intro_mentions_topic'), noteOf(checks, 'intro_mentions_topic'), 'Recomandat: expresia principală în primele 100 de cuvinte.')}
+          ${row('Liste / tabele în conținut', stateOf(checks, 'lists_tables'), noteOf(checks, 'lists_tables'), 'Recomandat: cel puțin o listă sau un tabel pentru secțiunile dense.')}
+          ${row('Lazy-load pentru imagini', stateOf(checks, 'lazyload_images'), noteOf(checks, 'lazyload_images'), 'Recomandat: imaginile mari setate cu loading="lazy" sau echivalent.')}
+          ${row('Video / iframe în pagină', stateOf(checks, 'video_present'), '', 'Recomandat: cel puțin un video sau iframe relevant în conținut.')}
 
           <div class="impact-title impact-low">Impact redus</div>
-          ${row('Dată publicare', stateOf(checks, 'date_published'), noteOf(checks, 'date_published'))}
-          ${row('Dată actualizare', stateOf(checks, 'date_modified'), noteOf(checks, 'date_modified'))}
-          ${row('Autor vizibil/Schema', stateOf(checks, 'author_visible_or_schema'), noteOf(checks, 'author_visible_or_schema'))}
+          ${row('Data publicării articolului', stateOf(checks, 'date_published'), noteOf(checks, 'date_published'), 'Recomandat: dată de publicare vizibilă sau definită în schema articolului.')}
+          ${row('Data ultimei actualizări', stateOf(checks, 'date_modified'), noteOf(checks, 'date_modified'), 'Recomandat: dată de actualizare vizibilă sau definită în schema articolului.')}
+          ${row('Autor articol', stateOf(checks, 'author_visible_or_schema'), noteOf(checks, 'author_visible_or_schema'), 'Recomandat: autorul să fie afișat sau definit în JSON-LD (Article/BlogPosting).')}
         </div>
       </div>`;
     }
@@ -1106,14 +1127,15 @@
           <div class="fs-5 fw-semibold mb-2">${b.structure ?? 0}/25</div>
 
           <div class="impact-title impact-high">Impact mare</div>
-          ${row('Indexabil (fără noindex)', stateOf(checks, 'indexable'), '')}
-          ${row('Canonical valid/self', stateOf(checks, 'canonical_valid'), noteOf(checks, 'canonical_valid'))}
-          ${row('URL curat', stateOf(checks, 'url_clean'), noteOf(checks, 'url_clean'))}
-          ${row('≥ 1 link intern', stateOf(checks, 'internal_links_present'), noteOf(checks, 'internal_links_present'))}
+          ${row('Indexabilitate pagină', stateOf(checks, 'indexable'), '', 'Recomandat: fără meta robots cu noindex pentru paginile care trebuie să rankeze.')}
+          ${row('Tag canonical prezent', stateOf(checks, 'canonical_present'), noteOf(checks, 'canonical_present'), 'Recomandat: un singur <link rel="canonical"> spre versiunea preferată.')}
+          ${row('Canonical valid', stateOf(checks, 'canonical_valid'), noteOf(checks, 'canonical_valid'), 'Recomandat: canonical pe același domeniu și către URL-ul canonic al paginii.')}
+          ${row('URL curat și descriptiv', stateOf(checks, 'url_clean'), noteOf(checks, 'url_clean'), 'Recomandat: slug scurt, fără parametri inutili sau spații.')}
+          ${row('Linkuri interne din articol', stateOf(checks, 'internal_links_present'), noteOf(checks, 'internal_links_present'), 'Recomandat: cel puțin 1–3 linkuri interne relevante în conținut.')}
 
           <div class="impact-title impact-medium">Impact mediu</div>
-          ${row('Canonical prezent', stateOf(checks, 'canonical_present'), noteOf(checks, 'canonical_present'))}
-          ${row('≥ 1 link extern', stateOf(checks, 'external_links_present'), noteOf(checks, 'external_links_present'))}
+          ${row('Canonical configurat', stateOf(checks, 'canonical_present'), noteOf(checks, 'canonical_present'), 'Recomandat: fiecare pagină importantă să aibă canonical explicit.')}
+          ${row('Linkuri externe de referință', stateOf(checks, 'external_links_present'), noteOf(checks, 'external_links_present'), 'Recomandat: cel puțin un link extern către surse de încredere (ghiduri, standarde, studii).')}
         </div>
       </div>`;
     }
@@ -1126,13 +1148,13 @@
           <div class="fs-5 fw-semibold mb-2">${b.signals ?? 0}/20</div>
 
           <div class="impact-title impact-high">Impact mare</div>
-          ${row('Title lungime OK', stateOf(checks, 'title_length_ok'), noteOf(checks, 'title_length_ok'))}
-          ${row('Meta description OK', stateOf(checks, 'meta_description_ok'), noteOf(checks, 'meta_description_ok'))}
-          ${row('JSON-LD Article recomandat', stateOf(checks, 'schema_article_recommended'), noteOf(checks, 'schema_article_recommended'))}
+          ${row('Titlu SEO (title)', stateOf(checks, 'title_length_ok'), noteOf(checks, 'title_length_ok'), 'Recomandat: 35–65 de caractere, cu termenul principal la început.')}
+          ${row('Meta description', stateOf(checks, 'meta_description_ok'), noteOf(checks, 'meta_description_ok'), 'Recomandat: 120–170 de caractere, text persuasiv diferit de titlu.')}
+          ${row('Schema Article / BlogPosting', stateOf(checks, 'schema_article_recommended'), noteOf(checks, 'schema_article_recommended'), 'Recomandat: JSON-LD Article/BlogPosting cu headline, image, author, datePublished, dateModified.')}
 
           <div class="impact-title impact-medium">Impact mediu</div>
-          ${row('Open Graph minim', stateOf(checks, 'og_minimal'), noteOf(checks, 'og_minimal'))}
-          ${row('Twitter Card (large)', stateOf(checks, 'twitter_card_large'), noteOf(checks, 'twitter_card_large'))}
+          ${row('Open Graph pentru social media', stateOf(checks, 'og_minimal'), noteOf(checks, 'og_minimal'), 'Recomandat: og:title, og:description, og:image (≥1200px), og:url definite corect.')}
+          ${row('Twitter Card (summary_large_image)', stateOf(checks, 'twitter_card_large'), noteOf(checks, 'twitter_card_large'), 'Recomandat: twitter:card=summary_large_image plus titlu, descriere și imagine.')}
         </div>
       </div>`;
     }
@@ -1144,42 +1166,49 @@
       <div class="fs-5 fw-semibold mb-2">${b.locale ?? 0}/15</div>
 
       <div class="impact-title impact-high">Impact mare</div>
-      ${row('lang="ro"/"ro-RO"', stateOf(checks, 'lang_ro'), noteOf(checks, 'lang_ro'))}
+      ${row('Limbă pagină (lang="ro")', stateOf(checks, 'lang_ro'), noteOf(checks, 'lang_ro'), 'Recomandat: atributul lang pe &lt;html&gt; setat pe ro sau ro-RO.')}
 
       <div class="impact-title impact-medium">Impact mediu</div>
-      ${row('OG locale / inLanguage „ro”', stateOf(checks, 'og_locale_or_inLanguage_ro'), noteOf(checks, 'og_locale_or_inLanguage_ro'))}
-      ${row('Dată în format RO', stateOf(checks, 'date_format_ro'), noteOf(checks, 'date_format_ro'))}
-      ${row('Hreflang (dacă există)', stateOf(checks, 'hreflang_pairs'), noteOf(checks, 'hreflang_pairs'))}
+      ${row('Localizare OG / schema în română', stateOf(checks, 'og_locale_or_inLanguage_ro'), noteOf(checks, 'og_locale_or_inLanguage_ro'), 'Recomandat: og:locale=ro_RO și/sau inLanguage "ro-RO" în JSON-LD.')}
+      ${row('Format românesc pentru dată', stateOf(checks, 'date_format_ro'), noteOf(checks, 'date_format_ro'), 'Recomandat: lunile scrise în română (ex. „noiembrie 2025”).')}
+      ${row('Hreflang pentru versiuni lingvistice', stateOf(checks, 'hreflang_pairs'), noteOf(checks, 'hreflang_pairs'), 'Recomandat: cel puțin un &lt;link rel="alternate" hreflang="..."&gt; pentru fiecare versiune de limbă.')}
     `;
       const locked = `
       <hr class="my-2">
 
       <div class="impact-title impact-high">Impact mare</div>
-      ${row('Telefon click-to-call', stateOf(checks, 'local_tel_click'), noteOf(checks, 'local_tel_click'))}
-      ${row('Prefix local (+40 2x/3x)', stateOf(checks, 'local_tel_prefix_local'), noteOf(checks, 'local_tel_prefix_local'))}
-      ${row('Schema LocalBusiness', stateOf(checks, 'local_schema_localbusiness'), noteOf(checks, 'local_schema_localbusiness'))}
-      ${row('Schema PostalAddress', stateOf(checks, 'local_schema_postal'), noteOf(checks, 'local_schema_postal'))}
-      ${row('Schema telephone', stateOf(checks, 'local_schema_tel'), noteOf(checks, 'local_schema_tel'))}
-      ${row('Oraș detectat', stateOf(checks, 'local_city_detected'), noteOf(checks, 'local_city_detected'))}
-      ${row('Oraș în Title', stateOf(checks, 'local_city_in_title'), noteOf(checks, 'local_city_in_title'))}
-      ${row('Oraș în H1', stateOf(checks, 'local_city_in_h1'), noteOf(checks, 'local_city_in_h1'))}
-      ${row('Oraș în URL slug', stateOf(checks, 'local_city_in_slug'), noteOf(checks, 'local_city_in_slug'))}
-      ${row('Oraș în intro', stateOf(checks, 'local_city_in_intro'), noteOf(checks, 'local_city_in_intro'))}
+      ${row('Telefon click-to-call', stateOf(checks, 'local_tel_click'), noteOf(checks, 'local_tel_click'), 'Recomandat: număr afișat ca link tel: pentru apel rapid pe mobil.')}
+      ${row('Telefon cu prefix local RO', stateOf(checks, 'local_tel_prefix_local'), noteOf(checks, 'local_tel_prefix_local'), 'Recomandat: număr românesc cu prefix 02x/03x/07x corespunzător zonei.')}
+      ${row('Adresă fizică vizibilă', stateOf(checks, 'local_address_visible'), '', 'Recomandat: adresă completă (stradă, număr, oraș, județ) vizibilă în pagină.')}
+      ${row('Link „Direcții” către hartă', stateOf(checks, 'local_directions_link'), noteOf(checks, 'local_directions_link'), 'Recomandat: buton sau link spre Google Maps / Apple Maps / Waze.')}
+      ${row('Program de lucru', stateOf(checks, 'local_opening_hours'), noteOf(checks, 'local_opening_hours'), 'Recomandat: program afișat clar și, ideal, definit în openingHoursSpecification.')}
+      ${row('Schema LocalBusiness', stateOf(checks, 'local_schema_localbusiness'), noteOf(checks, 'local_schema_localbusiness'), 'Recomandat: JSON-LD cu @type LocalBusiness sau un subtip (Dentist, Restaurant etc.).')}
+      ${row('Schema adresei poștale', stateOf(checks, 'local_schema_postal'), noteOf(checks, 'local_schema_postal'), 'Recomandat: PostalAddress cu streetAddress, addressLocality, addressRegion, postalCode.')}
+      ${row('Telefon în schema LocalBusiness', stateOf(checks, 'local_schema_tel'), noteOf(checks, 'local_schema_tel'), 'Recomandat: proprietatea telephone completată în schema.')}
+      ${row('Coordonate geo în schema', stateOf(checks, 'local_schema_geo'), noteOf(checks, 'local_schema_geo'), 'Recomandat: geo.latitude și geo.longitude definite corect.')}
+      ${row('Linkuri spre profiluri / hartă', stateOf(checks, 'local_schema_sameas'), noteOf(checks, 'local_schema_sameas'), 'Recomandat: sameAs și/sau hasMap către profiluri (GMB, social) și hartă.')}
+      ${row('Zonă deservită', stateOf(checks, 'local_schema_area'), noteOf(checks, 'local_schema_area'), 'Recomandat: areaServed sau serviceArea pentru zonele acoperite.')}
+      ${row('Recenzii și rating', stateOf(checks, 'local_schema_rating'), noteOf(checks, 'local_schema_rating'), 'Recomandat: aggregateRating / review în schema, pe baza recenziilor reale.')}
+      ${row('Orașul afacerii detectat', stateOf(checks, 'local_city_detected'), noteOf(checks, 'local_city_detected'), 'Recomandat: numele orașului prezent în titlu, H1, URL sau introducere.')}
+      ${row('Oraș în titlul SEO', stateOf(checks, 'local_city_in_title'), noteOf(checks, 'local_city_in_title'), 'Recomandat: orașul inclus în &lt;title&gt; pentru paginile locale.')}
+      ${row('Oraș în H1', stateOf(checks, 'local_city_in_h1'), noteOf(checks, 'local_city_in_h1'), 'Recomandat: orașul menționat în titlul principal când pagina țintește o zonă.')}
+      ${row('Oraș în URL (slug)', stateOf(checks, 'local_city_in_slug'), noteOf(checks, 'local_city_in_slug'), 'Recomandat: slugul să conțină numele orașului (ex. /serviciu-bucuresti/).')}
+      ${row('Oraș în introducere', stateOf(checks, 'local_city_in_intro'), noteOf(checks, 'local_city_in_intro'), 'Recomandat: orașul menționat natural în primele paragrafe.')}
 
       <div class="impact-title impact-medium">Impact mediu</div>
-      ${row('Adresă vizibilă', stateOf(checks, 'local_address_visible'), '')}
-      ${row('Link „Direcții” (hărți)', stateOf(checks, 'local_directions_link'), noteOf(checks, 'local_directions_link'))}
-      ${row('Program/Orar', stateOf(checks, 'local_opening_hours'), noteOf(checks, 'local_opening_hours'))}
-      ${row('Schema geo (lat/long)', stateOf(checks, 'local_schema_geo'), noteOf(checks, 'local_schema_geo'))}
-      ${row('sameAs/hasMap', stateOf(checks, 'local_schema_sameas'), noteOf(checks, 'local_schema_sameas'))}
-      ${row('areaServed/serviceArea', stateOf(checks, 'local_schema_area'), noteOf(checks, 'local_schema_area'))}
-      ${row('Embed hartă', stateOf(checks, 'local_map_embed'), noteOf(checks, 'local_map_embed'))}
-      ${row('ALT imagini cu oraș', stateOf(checks, 'local_alt_has_city'), noteOf(checks, 'local_alt_has_city'))}
+      ${row('Adresă vizibilă în pagină', stateOf(checks, 'local_address_visible'), '', 'Recomandat: secțiune de contact cu adresă completă vizibilă fără clic suplimentar.')}
+      ${row('Link „Direcții” (hărți)', stateOf(checks, 'local_directions_link'), noteOf(checks, 'local_directions_link'), 'Recomandat: un call-to-action clar pentru navigație.')}
+      ${row('Program/Orar afișat', stateOf(checks, 'local_opening_hours'), noteOf(checks, 'local_opening_hours'), 'Recomandat: orar zilnic afișat clar și sincronizat cu profilurile externe.')}
+      ${row('Schema geo (lat/long)', stateOf(checks, 'local_schema_geo'), noteOf(checks, 'local_schema_geo'), 'Recomandat: coordonate corecte pentru afișare pe hartă.')}
+      ${row('sameAs / hasMap', stateOf(checks, 'local_schema_sameas'), noteOf(checks, 'local_schema_sameas'), 'Recomandat: linkuri spre profilurile oficiale (GMB, social) și hartă.')}
+      ${row('areaServed / serviceArea', stateOf(checks, 'local_schema_area'), noteOf(checks, 'local_schema_area'), 'Recomandat: definirea zonelor deservite (cartiere, orașe, județe).')}
+      ${row('Hartă embedded în pagină', stateOf(checks, 'local_map_embed'), noteOf(checks, 'local_map_embed'), 'Recomandat: iframe Google Maps cu locația exactă a afacerii.')}
+      ${row('ALT imagini cu numele orașului', stateOf(checks, 'local_alt_has_city'), noteOf(checks, 'local_alt_has_city'), 'Recomandat: cel puțin o imagine cu ALT care include numele orașului.')}
 
       <div class="impact-title impact-low">Impact redus</div>
-      ${row('Recenzii / note (aggregateRating)', stateOf(checks, 'local_schema_rating'), noteOf(checks, 'local_schema_rating'))}
-      ${row('Store locator / pagini locații', stateOf(checks, 'local_locator'), noteOf(checks, 'local_locator'))}
-      ${row('WhatsApp click-to-chat', stateOf(checks, 'local_whatsapp'), noteOf(checks, 'local_whatsapp'))}
+      ${row('Recenzii / note în schema', stateOf(checks, 'local_schema_rating'), noteOf(checks, 'local_schema_rating'), 'Recomandat: agregarea recenziilor reale în aggregateRating.')}
+      ${row('Store locator / pagini pe locații', stateOf(checks, 'local_locator'), noteOf(checks, 'local_locator'), 'Recomandat: pagini separate pentru fiecare locație sau un locator cu listă și hartă.')}
+      ${row('WhatsApp click-to-chat', stateOf(checks, 'local_whatsapp'), noteOf(checks, 'local_whatsapp'), 'Recomandat: buton sau link către WhatsApp (wa.me / api.whatsapp.com).')}
     `;
 
       const localBadge = (localInfo && context === 'local')
@@ -1313,7 +1342,9 @@
               email: email,
               first_name: '',
               consent_newsletter: cNews,
-              consent_terms: cTerms
+              consent_terms: cTerms,
+              context: currentContext || 'article'
+
             })
           });
           const txt = await resp.text(); let j = null; try { j = JSON.parse(txt); } catch { }
@@ -1398,10 +1429,6 @@
       });
     })();
   </script>
-</body>
-
-</html>
-
 </body>
 
 </html>

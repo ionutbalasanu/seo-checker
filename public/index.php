@@ -222,6 +222,12 @@ if ($path === '/api/email-report' && $method === 'POST') {
         $consentNewsletter = (bool)($data['consent_newsletter'] ?? false);
         $consentTerms      = (bool)($data['consent_terms'] ?? false);
 
+        // context pentru email: articol sau pagină locală, la fel ca în UI
+        $context = (string)($data['context'] ?? 'article');
+        if ($context !== 'local') {
+            $context = 'article';
+        }
+
         if ($url === '' || $email === '') {
             http_response_code(400);
             echo json_encode(['ok' => false, 'error' => 'Lipsește URL sau email.']);
@@ -240,15 +246,26 @@ if ($path === '/api/email-report' && $method === 'POST') {
 
         $renderer = new RenderService(new HttpClient(), $cf);
         $render   = $renderer->getHtml($url, ['force_render' => true]);
-        $score    = ArticleScorer::score($render['html'], $url, 'deep');
 
-        $title = (string)($score['meta']['title'] ?? '');
-        $total = (int)($score['total'] ?? 0);
+        // folosim același context ca în UI (article/local)
+        $score    = ArticleScorer::score($render['html'], $url, 'deep', [
+            'context' => $context,
+        ]);
+
+        $title = (string)($score['meta']['title'] ?? $url);
+
+        // scorul „overall” (donut) — include SEO local când context = local
+        $totalOverall = (int)($score['total'] ?? 0);
+
+        // prefix diferit pentru articol vs pagină locală
+        $subjectPrefix = ($context === 'local')
+            ? 'Raport SEO - Articol local'
+            : 'Raport SEO - Articol general';
 
         // 2) Email body (HTML + TXT)
         $emailData = [
-            'source' => $render['source'] ?? '',
-            'score'  => $score,
+            'source'  => $render['source'] ?? '',
+            'score'   => $score,
         ];
         $htmlBody = EmailRenderer::renderHtml($url, $emailData);
         $txtBody  = EmailRenderer::renderText($url, $emailData);
@@ -267,11 +284,14 @@ if ($path === '/api/email-report' && $method === 'POST') {
             $mail->Encoding   = 'base64';
 
             $fromEmail = (string) envget('MAIL_FROM', 'reports@novaweb.ro');
-            $fromName  = (string) envget('MAIL_FROM_NAME', 'Novaweb SEO Checker');
+            $fromName  = (string) envget('MAIL_FROM_NAME', 'Novaweb Audit SEO One-Page');
 
             $mail->setFrom($fromEmail, $fromName);
             $mail->addAddress($email, $firstName ?: '');
-            $mail->Subject = sprintf('Raport SEO — %d/100', $total);
+
+            // Subiect final: prefix în funcție de context + scor overall (la fel ca în donut)
+            $mail->Subject = sprintf('%s — %d/100', $subjectPrefix, $totalOverall);
+
             $mail->isHTML(true);
             $mail->Body    = $htmlBody;
             $mail->AltBody = $txtBody;

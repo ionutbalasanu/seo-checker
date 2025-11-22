@@ -68,6 +68,124 @@ final class Advice
         return $L[$id] ?? ('Test: ' . $id);
     }
 
+    /**
+     * Regula / pragul necesar pentru a considera testul trecut.
+     * Folosită pentru a afișa „* ...” în UI și în email.
+     */
+    public static function rule(string $id): ?string
+    {
+        switch ($id) {
+            // Content & UX
+            case 'word_count_800':
+                return 'Numărul de cuvinte trebuie să fie de cel puțin 800 în articolul analizat.';
+            case 'intro_mentions_topic':
+                return 'Termenul principal trebuie să apară în primele aproximativ 100 de cuvinte ale textului.';
+            case 'h1_single':
+                return 'Trebuie să existe exact un singur tag H1 relevant pe pagină.';
+            case 'headings_hierarchy':
+                return 'Structura H2/H3 nu trebuie să sară niveluri și ar trebui să existe cel puțin 3 subcapitole (H2/H3).';
+            case 'lists_tables':
+                return 'În conținut trebuie să existe cel puțin o listă (ul/ol) sau un tabel.';
+            case 'images_in_body':
+                return 'În corpul articolului trebuie să existe cel puțin o imagine contextuală reală.';
+            case 'img_alt_ratio_80':
+                return 'Cel puțin 80% dintre imaginile relevante trebuie să aibă atribut ALT completat.';
+            case 'lazyload_images':
+                return 'Cel puțin o imagine (ideal toate) trebuie să folosească lazy-load (loading="lazy" sau echivalent).';
+            case 'video_present':
+                return 'Trebuie să existe cel puțin un video sau iframe relevant în conținut.';
+            case 'date_published':
+                return 'Trebuie expusă data publicării, fie vizibilă, fie în meta/JSON-LD.';
+            case 'date_modified':
+                return 'Trebuie expusă data ultimei actualizări (dateModified/meta/JSON-LD).';
+            case 'author_visible_or_schema':
+                return 'Autorul trebuie să fie vizibil în pagină sau definit în schema (author).';
+
+            // Structură & Indexare
+            case 'indexable':
+                return 'Pagina nu trebuie să aibă meta robots cu „noindex” sau directive echivalente.';
+            case 'canonical_present':
+                return 'Trebuie să existe un link rel="canonical" către versiunea preferată a paginii.';
+            case 'canonical_valid':
+                return 'Canonical-ul trebuie să fie pe același domeniu și să indice URL-ul canonic corect.';
+            case 'url_clean':
+                return 'Slug-ul URL trebuie să fie scurt, fără parametri inutili și fără spații sau caractere problematice.';
+            case 'internal_links_present':
+                return 'Trebuie să existe cel puțin un link intern relevant către altă pagină din site.';
+            case 'external_links_present':
+                return 'Trebuie să existe cel puțin un link extern către o sursă de încredere.';
+
+            // Metadate & Rich
+            case 'title_length_ok':
+                return 'Titlul SEO ar trebui să aibă între ~35 și ~65 de caractere.';
+            case 'meta_description_ok':
+                return 'Meta description ar trebui să aibă între ~120 și ~170 de caractere.';
+            case 'og_minimal':
+                return 'Trebuie definite cel puțin og:title, og:description, og:image și og:url.';
+            case 'twitter_card_large':
+                return 'Trebuie setat twitter:card=summary_large_image cu titlu, descriere și imagine.';
+            case 'schema_article_recommended':
+                return 'Trebuie implementată schema Article/BlogPosting cu headline, image, author, datePublished și ideal dateModified.';
+
+            // Localizare RO — de bază
+            case 'lang_ro':
+                return 'Atributul lang pe <html> (și/sau inLanguage în schema) trebuie setat pe ro sau ro-RO.';
+            case 'og_locale_or_inLanguage_ro':
+                return 'Trebuie setat og:locale=ro_RO sau inLanguage="ro-RO" în JSON-LD.';
+            case 'date_format_ro':
+                return 'Datele afișate în pagină ar trebui să folosească numele lunilor în limba română.';
+            case 'hreflang_pairs':
+                return 'Pentru versiunile lingvistice alternative trebuie definite link-uri rel="alternate" hreflang="...".';
+
+            // Local – EXTRA (SEO local)
+            case 'local_tel_click':
+                return 'În pagină trebuie să existe un link „tel:” pentru numărul de telefon (click-to-call).';
+            case 'local_tel_prefix_local':
+                return 'Numărul de telefon trebuie să fie un număr românesc valid (prefix 0, 40 sau 0040 urmat de 2x/3x/7x).';
+            case 'local_address_visible':
+                return 'Adresa fizică (stradă, oraș, județ) trebuie vizibilă în pagină.';
+            case 'local_directions_link':
+                return 'Trebuie să existe un link de tip „Direcții” către Google Maps / Apple Maps / Waze etc.';
+            case 'local_opening_hours':
+                return 'Programul de funcționare trebuie afișat în text sau definit în schema (openingHoursSpecification).';
+            case 'local_schema_localbusiness':
+                return 'Trebuie implementat un obiect JSON-LD @type LocalBusiness (sau subtip).';
+            case 'local_schema_postal':
+                return 'Schema trebuie să includă PostalAddress cu streetAddress, addressLocality, addressRegion, postalCode.';
+            case 'local_schema_tel':
+                return 'Schema LocalBusiness trebuie să includă câmpul telephone.';
+            case 'local_schema_geo':
+                return 'Schema trebuie să conțină coordonate geo (latitude și longitude).';
+            case 'local_schema_sameas':
+                return 'Schema trebuie să includă sameAs și/sau hasMap (profiluri și hartă).';
+            case 'local_schema_area':
+                return 'Trebuie definită aria deservită (areaServed/serviceArea) în schema locală.';
+            case 'local_schema_rating':
+                return 'Pentru recenzii trebuie folosit aggregateRating sau review în JSON-LD.';
+            case 'local_city_detected':
+                return 'Numele orașului afacerii trebuie să apară în pagină (titlu, H1, URL sau conținut).';
+            case 'local_city_in_title':
+                return 'Numele orașului ar trebui inclus în <title> pentru paginile locale.';
+            case 'local_city_in_h1':
+                return 'Numele orașului ar trebui inclus în H1 pentru paginile locale.';
+            case 'local_city_in_slug':
+                return 'Slug-ul URL ar trebui să conțină numele orașului (ex. /serviciu-bucuresti/).';
+            case 'local_city_in_intro':
+                return 'Introducerea textului trebuie să menționeze orașul în mod natural.';
+            case 'local_map_embed':
+                return 'Trebuie încorporată o hartă (iframe) cu locația exactă (ex. Google Maps).';
+            case 'local_alt_has_city':
+                return 'Cel puțin o imagine relevantă ar trebui să aibă numele orașului în atributul ALT.';
+            case 'local_locator':
+                return 'Site-ul ar trebui să aibă pagini distincte per locație și/sau un store locator.';
+            case 'local_whatsapp':
+                return 'Ar trebui să existe un link/buton WhatsApp click-to-chat pentru contact rapid.';
+
+            default:
+                return null;
+        }
+    }
+
     /** Recomandare pentru fiecare test picat */
     public static function tip(string $id, ?string $note = ''): string
     {

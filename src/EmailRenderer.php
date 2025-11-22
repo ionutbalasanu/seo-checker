@@ -13,10 +13,15 @@ final class EmailRenderer
         $checks    = $score['checks'] ?? [];
         $context   = (string)($score['context'] ?? 'article');
 
-        // scor global (on-page)
+        // scor global (on-page pur)
         $totalGlobal = isset($score['total_global'])
             ? (int)$score['total_global']
             : (int)($score['total'] ?? 0);
+
+        // scor combinat (același ca în UI / donut)
+        $totalCombined = isset($score['total'])
+            ? (int)$score['total']
+            : $totalGlobal;
 
         // SEO local (din ArticleScorer::LOCAL_MAX + percent)
         $localInfo = $score['local'] ?? null;
@@ -53,8 +58,24 @@ final class EmailRenderer
             $localCaption = 'Pentru această pagină, SEO local este inclus în scorul final (context „pagină locală”).';
         }
 
+        // combin top priorități globale + locale (max 6)
+        $topPriorities = array_slice(array_merge($badChecksGlobal, $badChecksLocal), 0, 6);
+
         $htmlTitle = self::eHtml($title);
         $htmlUrl   = self::eHtml($url);
+
+        // Logo:
+        // 1) dacă trimiți $data['logo_url'], îl folosește
+        // 2) altfel încearcă envget('NOVAWEB_LOGO_URL') (din bootstrap.php)
+        $logoUrl = 'https://novaweb.ro/wp-content/uploads/2025/11/logo_white.avif';
+        if (!empty($data['logo_url'])) {
+            $logoUrl = (string)$data['logo_url'];
+        } elseif (function_exists('envget')) {
+            $envLogo = (string)(envget('NOVAWEB_LOGO_URL', '') ?? '');
+            if ($envLogo !== '') {
+                $logoUrl = $envLogo;
+            }
+        }
 
         ob_start();
         ?>
@@ -62,225 +83,269 @@ final class EmailRenderer
 <html lang="ro">
 <head>
   <meta charset="utf-8">
-  <title>Raport SEO</title>
+  <title>Raport SEO - Novaweb</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f6f7fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+<body style="margin:0;padding:0;background-color:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
     <tr>
       <td align="center" style="padding:24px 12px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:720px;background:transparent;">
-          <!-- Badge / „logo” -->
-          <tr>
-            <td style="padding-bottom:12px;">
-              <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#0f172a;color:#e5edff;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;">
-                Novaweb SEO Checker
-              </span>
-            </td>
-          </tr>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:760px;background:#f9fafb;border-radius:18px;box-shadow:0 18px 40px rgba(15,23,42,.16);overflow:hidden;">
 
-          <!-- Titlu + URL -->
+          <!-- HEADER + HERO -->
           <tr>
-            <td style="padding-bottom:6px;font-size:22px;font-weight:700;color:#0f172a;">
-              Raport SEO pentru:
-            </td>
-          </tr>
-          <tr>
-            <td style="padding-bottom:2px;font-size:16px;font-weight:600;color:#0f172a;">
-              <?php echo $htmlTitle; ?>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding-bottom:16px;font-size:13px;color:#64748b;">
-              <a href="<?php echo $htmlUrl; ?>" style="color:#2563eb;text-decoration:none;"><?php echo $htmlUrl; ?></a>
-            </td>
-          </tr>
-
-          <!-- HERO CARD: scor + rezumat + bare pe categorii -->
-          <tr>
-            <td>
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#104172;border-radius:18px;padding:18px 18px 16px;color:#e5edff;box-shadow:0 18px 40px rgba(15,23,42,.40);">
+            <td style="padding:0;background:#020617;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <!-- header strip -->
                 <tr>
-                  <!-- stânga: scor + context -->
-                  <td width="42%" style="vertical-align:top;padding-right:10px;">
-                    <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#bfdbfe;">
-                      Scor SEO on-page
-                    </div>
-                    <div style="padding-top:6px;font-size:36px;font-weight:700;line-height:1;">
-                      <?php echo (int)$totalGlobal; ?><span style="font-size:16px;color:#cbd5f5;">/100</span>
-                    </div>
-                    <div style="padding-top:6px;font-size:12px;color:#e5edff;">
-                      Tip pagină:
-                      <strong><?php echo $context === 'local' ? 'Pagină locală' : 'Articol obișnuit'; ?></strong>
-                    </div>
-                    <?php if ($localInfo !== null): ?>
-                      <div style="padding-top:4px;font-size:12px;color:#c4f1c5;">
-                        SEO local: <strong><?php echo $localPoints; ?>/<?php echo $localMax; ?></strong>
-                        (<?php echo $localPercent; ?>%)
-                      </div>
-                    <?php endif; ?>
-                    <div style="padding-top:8px;font-size:11px;color:#9ca3af;">
-                      HTML analizat: <?php echo self::eHtml($source ?: 'rendered'); ?>
-                    </div>
-                  </td>
-
-                  <!-- dreapta: rezumat + bare pe categorii -->
-                  <td width="58%" style="vertical-align:top;padding-left:10px;border-left:1px solid rgba(148,163,184,.4);">
-                    <!-- Rezumat scurt -->
-                    <?php if ($badChecksGlobal): ?>
-                      <div style="font-size:12px;color:#fee2e2;margin-bottom:4px;font-weight:600;">
-                        De reparat cu prioritate:
-                      </div>
-                      <ul style="margin:0 0 8px 18px;padding:0;font-size:12px;color:#fee2e2;">
-                        <?php foreach ($badChecksGlobal as $c): ?>
-                          <li style="margin-bottom:2px;"><?php echo self::labelFor($c['id'], $c['note'], false); ?></li>
-                        <?php endforeach; ?>
-                      </ul>
-                    <?php endif; ?>
-
-                    <?php if ($goodChecksGlobal): ?>
-                      <div style="font-size:12px;color:#bbf7d0;margin-bottom:4px;font-weight:600;">
-                        Puncte forte:
-                      </div>
-                      <ul style="margin:0 0 8px 18px;padding:0;font-size:12px;color:#dcfce7;">
-                        <?php foreach ($goodChecksGlobal as $c): ?>
-                          <li style="margin-bottom:2px;"><?php echo self::labelFor($c['id'], $c['note'], true); ?></li>
-                        <?php endforeach; ?>
-                      </ul>
-                    <?php endif; ?>
-
-                    <!-- Bare pe categorii -->
-                    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:4px;">
+                  <td style="padding:14px 20px 10px 20px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                       <tr>
-                        <td colspan="2" style="font-size:11px;color:#cbd5f5;padding-bottom:4px;">
-                          Distribuția scorului pe categorii
+                        <td valign="middle" align="left">
+                          <?php if ($logoUrl !== ''): ?>
+                            <img src="<?php echo self::eHtml($logoUrl); ?>" alt="Novaweb"
+                                 style="display:block;height:30px;width:auto;">
+                          <?php else: ?>
+                            <div style="font-size:18px;font-weight:700;color:#e5e7eb;">Novaweb</div>
+                          <?php endif; ?>
+                        </td>
+                        <td valign="middle" align="right">
+                          <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#111827;color:#bfdbfe;font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;">
+                            Audit SEO automat
+                          </span>
                         </td>
                       </tr>
-
-                      <?php
-                      $cats = [
-                          ['label' => 'Conținut & media',           'score' => $contentScore,   'max' => $maxContent,   'pct' => $pctContent],
-                          ['label' => 'Structură & indexare',       'score' => $structureScore, 'max' => $maxStructure, 'pct' => $pctStructure],
-                          ['label' => 'Metadate & rich snippets',   'score' => $signalsScore,   'max' => $maxSignals,   'pct' => $pctSignals],
-                          ['label' => 'Localizare RO',              'score' => $localeScore,    'max' => $maxLocale,    'pct' => $pctLocale],
-                      ];
-                      foreach ($cats as $cat):
-                        $pct = $cat['pct'];
-                      ?>
-                        <tr>
-                          <td style="font-size:11px;color:#e5edff;padding:2px 6px 4px 0;white-space:nowrap;">
-                            <?php echo self::eHtml($cat['label']); ?>
-                          </td>
-                          <td style="padding:2px 0 4px 0;">
-                            <div style="font-size:11px;color:#bfdbfe;margin-bottom:2px;">
-                              <?php echo (int)$cat['score']; ?>/<?php echo (int)$cat['max']; ?>
-                            </div>
-                            <div style="width:100%;height:6px;border-radius:999px;background:#0b2950;overflow:hidden;">
-                              <div style="height:6px;border-radius:999px;background:linear-gradient(90deg,#6366f1,#22d3ee);width:<?php echo $pct; ?>%;"></div>
-                            </div>
-                          </td>
-                        </tr>
-                      <?php endforeach; ?>
                     </table>
                   </td>
                 </tr>
+
+                <!-- hero content -->
+                <tr>
+                  <td style="padding:0 20px 18px 20px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                           style="background:radial-gradient(circle at top,#00103d73 0,#020617 52%);border-radius:14px;padding:16px 16px 14px 16px;">
+                      <tr>
+                        <!-- stânga: titlu + URL -->
+                        <td valign="top" align="left" style="padding-right:10px;">
+                          <div style="font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">
+                            Raport SEO pentru pagină
+                          </div>
+                          <div style="font-size:16px;font-weight:600;color:#f9fafb;margin-bottom:4px;">
+                            <?php echo $htmlTitle; ?>
+                          </div>
+                          <div style="font-size:12px;color:#bfdbfe;margin-bottom:6px;word-break:break-all;">
+                            <a href="<?php echo $htmlUrl; ?>" style="color:#bfdbfe;text-decoration:none;"><?php echo $htmlUrl; ?></a>
+                          </div>
+                        </td>
+
+                        <!-- dreapta: scor -->
+                        <td valign="top" align="right" style="padding-left:12px;">
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                              <td align="right">
+                                <div style="font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">
+                                  Scor SEO total
+                                </div>
+                                <div style="font-size:40px;font-weight:700;color:#f9fafb;line-height:1;">
+                                  <?php echo (int)$totalCombined; ?><span style="font-size:18px;color:#9ca3af;">/100</span>
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td align="right" style="padding-top:8px;">
+                                <div style="font-size:12px;color:#e5e7eb;margin-bottom:2px;">
+                                  Tip pagină:
+                                  <strong><?php echo $context === 'local'
+                                      ? 'Pagină locală (on-page + local)'
+                                      : 'Articol general'; ?></strong>
+                                </div>
+                                <?php if ($localInfo !== null): ?>
+                                  <div style="font-size:12px;color:#bbf7d0;margin-bottom:2px;">
+                                    Scor on-page (global): <strong><?php echo $totalGlobal; ?>/100</strong> &nbsp;·&nbsp;
+                                    SEO local: <strong><?php echo $localPoints; ?>/<?php echo $localMax; ?></strong> (<?php echo $localPercent; ?>%)
+                                  </div>
+                                <?php else: ?>
+                                  <div style="font-size:12px;color:#cbd5f5;margin-bottom:2px;">
+                                    Scor on-page (global): <strong><?php echo $totalGlobal; ?>/100</strong>
+                                  </div>
+                                <?php endif; ?>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
               </table>
             </td>
           </tr>
 
-          <!-- CARD SEO LOCAL separat -->
-          <?php if ($localInfo !== null): ?>
-            <tr>
-              <td style="padding-top:16px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ecfdf5;border-radius:14px;padding:14px 16px;border:1px solid #bbf7d0;">
-                  <tr>
-                    <td width="40%" style="vertical-align:top;padding-right:10px;">
-                      <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#16a34a;">
-                        SEO local
-                      </div>
-                      <div style="padding-top:4px;font-size:24px;font-weight:700;color:#166534;line-height:1;">
-                        <?php echo $localPercent; ?><span style="font-size:14px;color:#4b5563;">/100</span>
-                      </div>
-                      <div style="padding-top:4px;font-size:13px;color:#166534;">
-                        Puncte locale: <strong><?php echo $localPoints; ?>/<?php echo $localMax; ?></strong>
-                      </div>
-                      <div style="padding-top:6px;font-size:11px;color:#6b7280;">
-                        <?php echo self::eHtml($localCaption); ?>
-                      </div>
-                    </td>
-                    <td width="60%" style="vertical-align:top;padding-left:10px;border-left:1px solid #bbf7d0;">
-                      <?php if ($badChecksLocal): ?>
-                        <div style="font-size:12px;color:#b91c1c;margin-bottom:4px;font-weight:600;">
-                          De îmbunătățit (SEO local):
-                        </div>
-                        <ul style="margin:0 0 6px 18px;padding:0;font-size:12px;color:#b91c1c;">
-                          <?php foreach ($badChecksLocal as $c): ?>
-                            <li style="margin-bottom:2px;"><?php echo self::labelFor($c['id'], $c['note'], false); ?></li>
-                          <?php endforeach; ?>
-                        </ul>
-                      <?php endif; ?>
+          <!-- REZUMAT PE CATEGORII -->
+          <tr>
+            <td style="padding:18px 22px 6px 22px;background:#f9fafb;">
+              <div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:6px;">
+                Rezumat pe categorii
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 22px 16px 22px;background:#f9fafb;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <?php
+                  $cats = [
+                      ['label' => 'Conținut & media',         'score' => $contentScore,   'max' => $maxContent,   'pct' => $pctContent],
+                      ['label' => 'Structură & indexare',     'score' => $structureScore, 'max' => $maxStructure, 'pct' => $pctStructure],
+                      ['label' => 'Metadate & rich snippets', 'score' => $signalsScore,   'max' => $maxSignals,   'pct' => $pctSignals],
+                      ['label' => 'Localizare RO',            'score' => $localeScore,    'max' => $maxLocale,    'pct' => $pctLocale],
+                  ];
+                  foreach ($cats as $cat):
+                  ?>
+                  <td valign="top" style="width:25%;padding:4px 4px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;padding:8px 8px 6px 8px;">
+                      <tr>
+                        <td style="font-size:11px;color:#6b7280;padding-bottom:2px;">
+                          <?php echo self::eHtml($cat['label']); ?>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="font-size:14px;font-weight:600;color:#111827;padding-bottom:2px;">
+                          <?php echo (int)$cat['score']; ?>/<?php echo (int)$cat['max']; ?>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="font-size:11px;color:#4b5563;">
+                          <?php echo (int)$cat['pct']; ?>% acoperire
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <?php endforeach; ?>
+                </tr>
+              </table>
+              <div style="font-size:11px;color:#6b7280;margin-top:6px;">
+                <?php echo self::eHtml($localCaption); ?>
+              </div>
+            </td>
+          </tr>
 
-                      <?php if ($goodChecksLocal): ?>
-                        <div style="font-size:12px;color:#15803d;margin-bottom:4px;font-weight:600;">
-                          Puncte forte (SEO local):
+          <!-- PRIORITĂȚI PRINCIPALE -->
+          <?php if ($topPriorities): ?>
+          <tr>
+            <td style="padding:0 22px 6px 22px;background:#f9fafb;">
+              <div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:6px;">
+                Priorități principale (de reparat cu prioritate)
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 22px 16px 22px;background:#f9fafb;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#ffffff;border-radius:12px;border:1px solid #fee2e2;padding:10px 10px 8px 10px;">
+                <?php foreach ($topPriorities as $c): ?>
+                  <?php
+                    $id   = (string)($c['id'] ?? '');
+                    $note = (string)($c['note'] ?? '');
+                    $label = self::mapLabel($id);
+                    $tip   = '';
+                    if (class_exists('Advice')) {
+                        try {
+                            $tip = \Advice::tip($id, $note);
+                        } catch (\Throwable $e) {
+                            $tip = '';
+                        }
+                    }
+                  ?>
+                  <tr>
+                    <td style="font-size:12px;color:#b91c1c;padding:4px 4px 2px 0;">
+                      <span style="display:inline-block;min-width:22px;padding:2px 7px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:600;text-transform:uppercase;">
+                        Fix
+                      </span>
+                    </td>
+                    <td style="font-size:12px;color:#111827;padding:4px 0 2px 0;">
+                      <strong><?php echo self::eHtml($label); ?></strong>
+                      <?php if ($note): ?>
+                        <span style="color:#4b5563;"> — <?php echo self::eHtml($note); ?></span>
+                      <?php endif; ?>
+                      <?php if ($tip): ?>
+                        <div style="font-size:11px;color:#6b7280;margin-top:2px;">
+                          Recomandare: <?php echo self::eHtml($tip); ?>
                         </div>
-                        <ul style="margin:0 0 0 18px;padding:0;font-size:12px;color:#166534;">
-                          <?php foreach ($goodChecksLocal as $c): ?>
-                            <li style="margin-bottom:2px;"><?php echo self::labelFor($c['id'], $c['note'], true); ?></li>
-                          <?php endforeach; ?>
-                        </ul>
                       <?php endif; ?>
                     </td>
                   </tr>
-                </table>
-              </td>
-            </tr>
+                <?php endforeach; ?>
+              </table>
+            </td>
+          </tr>
           <?php endif; ?>
 
           <!-- DETALII VERIFICĂRI GLOBAL -->
           <tr>
-            <td style="padding-top:16px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:14px;padding:14px 16px;border:1px solid #e2e8f0;">
-                <tr>
-                  <td style="font-size:13px;font-weight:600;color:#0f172a;padding-bottom:8px;">
-                    Detalii verificări SEO on-page
-                  </td>
-                </tr>
-                <tr>
-                  <td style="font-size:12px;color:#0f172a;">
-                    <?php echo self::renderChecksTable($checks, false); ?>
-                  </td>
-                </tr>
-              </table>
+            <td style="padding:0 22px 6px 22px;background:#f9fafb;">
+              <div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:6px;">
+                Detalii verificări SEO on-page
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 22px 16px 22px;background:#f9fafb;">
+              <?php echo self::renderChecksTable($checks, false); ?>
             </td>
           </tr>
 
           <!-- DETALII VERIFICĂRI LOCAL -->
           <?php if ($localInfo !== null): ?>
-            <tr>
-              <td style="padding-top:12px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:14px;padding:14px 16px;border:1px solid #bbf7d0;">
-                  <tr>
-                    <td style="font-size:13px;font-weight:600;color:#166534;padding-bottom:8px;">
-                      Detalii verificări SEO local
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="font-size:12px;color:#0f172a;">
-                      <?php echo self::renderChecksTable($checks, true); ?>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
+          <tr>
+            <td style="padding:0 22px 6px 22px;background:#f9fafb;">
+              <div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:6px;">
+                Detalii verificări SEO local
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 22px 16px 22px;background:#f9fafb;">
+              <?php echo self::renderChecksTable($checks, true); ?>
+            </td>
+          </tr>
           <?php endif; ?>
+
+          <!-- CTA / Marketing -->
+          <tr>
+            <td style="padding:0 22px 18px 22px;background:#f9fafb;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#ffffff;border-radius:14px;border:1px solid #dbeafe;padding:14px 14px 12px 14px;">
+                <tr>
+                  <td valign="top" style="padding-right:8px;">
+                    <div style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px;">
+                      Ai nevoie de ajutor pentru implementarea recomandărilor?
+                    </div>
+                    <div style="font-size:12px;color:#4b5563;margin-bottom:10px;line-height:1.6;">
+                      Echipa <strong>Novaweb</strong> te poate ajuta cu optimizarea conținutului,
+                      implementarea schemelor, SEO local (Google Maps) și strategia generală
+                      de creștere organică.
+                    </div>
+                    <a href="https://novaweb.ro/contact/" target="_blank" rel="noopener"
+                       style="display:inline-block;padding:9px 18px;border-radius:999px;background:linear-gradient(135deg,#2563eb,#38bdf8);color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;">
+                      Programează o discuție cu Novaweb
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
           <!-- FOOTER -->
           <tr>
-            <td style="padding-top:12px;font-size:11px;color:#94a3b8;">
-              Acest raport a fost generat automat de Novaweb SEO Checker.
-              Rezultatele sunt orientative și nu înlocuiesc un audit SEO complet.
+            <td style="padding:10px 22px 18px 22px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+              <div style="font-size:11px;color:#6b7280;line-height:1.5;">
+                Acest raport a fost generat automat de <strong>Novaweb Audit SEO One-Page</strong>.
+                Rezultatele sunt orientative și nu înlocuiesc un audit SEO complet.
+                Pentru un plan personalizat de optimizare, intră pe
+                <a href="https://novaweb.ro/contact/" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none;">novaweb.ro/contact</a>.
+              </div>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -301,9 +366,13 @@ final class EmailRenderer
         $checks    = $score['checks'] ?? [];
         $context   = (string)($score['context'] ?? 'article');
 
+        // la fel ca în HTML: scor combinat
         $totalGlobal = isset($score['total_global'])
             ? (int)$score['total_global']
             : (int)($score['total'] ?? 0);
+        $totalCombined = isset($score['total'])
+            ? (int)$score['total']
+            : $totalGlobal;
 
         $localInfo = $score['local'] ?? null;
         $localPoints  = $localInfo['points']  ?? null;
@@ -329,19 +398,29 @@ final class EmailRenderer
         $lines[] = 'Raport SEO pentru:';
         $lines[] = $title;
         $lines[] = $url;
-        $lines[] = str_repeat('=', 48);
+        $lines[] = str_repeat('=', 60);
         $lines[] = '';
-        $lines[] = sprintf('Scor SEO on-page: %d/100', $totalGlobal);
-        $lines[] = sprintf('- Conținut: %d/40', $contentScore);
+        $lines[] = sprintf('Scor SEO total: %d/100', $totalCombined);
+        $lines[] = sprintf('- Scor on-page (global): %d/100', $totalGlobal);
+        $lines[] = sprintf('- Conținut & media: %d/40', $contentScore);
         $lines[] = sprintf('- Structură & Indexare: %d/25', $structureScore);
         $lines[] = sprintf('- Metadate & Snippets: %d/20', $signalsScore);
         $lines[] = sprintf('- Localizare RO: %d/15', $localeScore);
         $lines[] = '';
 
+        if ($localInfo !== null) {
+            $lines[] = sprintf('- SEO local: %d/%d (%d%%)', (int)($localPoints ?? 0), (int)($localMax ?? 0), (int)($localPercent ?? 0));
+        }
+        $lines[] = '';
+
         if ($badChecksGlobal) {
-            $lines[] = 'De îmbunătățit (global):';
+            $lines[] = 'Fix (global):';
             foreach ($badChecksGlobal as $c) {
+                $tip = class_exists('Advice') ? \Advice::tip((string)$c['id'], (string)($c['note'] ?? '')) : '';
                 $lines[] = '  - '.self::labelForText($c['id'], $c['note'], false);
+                if ($tip) {
+                    $lines[] = '      Recomandare: '.$tip;
+                }
             }
             $lines[] = '';
         }
@@ -355,18 +434,22 @@ final class EmailRenderer
         }
 
         if ($localInfo !== null) {
-            $lines[] = str_repeat('-', 48);
+            $lines[] = str_repeat('-', 60);
             $lines[] = 'SEO Local';
-            $lines[] = str_repeat('-', 48);
+            $lines[] = str_repeat('-', 60);
             $lines[] = sprintf('Scor SEO local: %d/100', (int)($localPercent ?? 0));
             $lines[] = sprintf('Puncte local: %d/%d', (int)($localPoints ?? 0), (int)($localMax ?? 0));
             $lines[] = $localCaption;
             $lines[] = '';
 
             if ($badChecksLocal) {
-                $lines[] = 'De îmbunătățit (SEO local):';
+                $lines[] = 'Fix (SEO local):';
                 foreach ($badChecksLocal as $c) {
+                    $tip = class_exists('Advice') ? \Advice::tip((string)$c['id'], (string)($c['note'] ?? '')) : '';
                     $lines[] = '  - '.self::labelForText($c['id'], $c['note'], false);
+                    if ($tip) {
+                        $lines[] = '      Recomandare: '.$tip;
+                    }
                 }
                 $lines[] = '';
             }
@@ -379,9 +462,9 @@ final class EmailRenderer
             }
         }
 
-        $lines[] = str_repeat('=', 48);
-        $lines[] = 'Raport generat automat de Novaweb SEO Checker.';
-        $lines[] = 'Rezultatele sunt orientative și nu înlocuiesc un audit complet.';
+        $lines[] = str_repeat('=', 60);
+        $lines[] = 'Raport generat automat de Novaweb Audit SEO One-Page.';
+        $lines[] = 'Pentru ajutor la implementare, intră pe https://novaweb.ro/contact/.';
         $lines[] = '';
 
         return implode("\n", $lines);
@@ -463,68 +546,68 @@ final class EmailRenderer
     }
 
     /**
-     * Mapare id verificare -> text scurt în română
+     * Mapare id verificare -> text scurt, modern, în română
      */
     private static function mapLabel(string $id): string
     {
         switch ($id) {
-            // Content & UX
-            case 'word_count_800':             return 'Număr de cuvinte ≥ 800';
-            case 'intro_mentions_topic':       return 'Intro-ul menționează tema principală';
-            case 'h1_single':                  return 'Un singur H1 pe pagină';
-            case 'headings_hierarchy':         return 'Ierarhie bună H2/H3';
-            case 'lists_tables':               return 'Liste / tabele în conținut';
-            case 'images_in_body':             return 'Imagini în corpul articolului';
-            case 'img_alt_ratio_80':           return '≥ 80% dintre imagini au ALT';
-            case 'lazyload_images':            return 'Imaginile folosesc lazy-load';
-            case 'video_present':              return 'Video sau iframe în conținut';
-            case 'date_published':             return 'Dată publicare vizibilă / în schema';
-            case 'date_modified':              return 'Dată actualizare vizibilă / în schema';
+            // Conținut & UX
+            case 'word_count_800':             return 'Dimensiune text (cuvinte) — recomandat ≥ 800';
+            case 'intro_mentions_topic':       return 'Introducere care menționează subiectul principal';
+            case 'h1_single':                  return 'Titlu principal (H1) unic pe pagină';
+            case 'headings_hierarchy':         return 'Structură clară a subtitlurilor H2/H3';
+            case 'lists_tables':               return 'Liste și tabele pentru scanare ușoară';
+            case 'images_in_body':             return 'Imagini relevante în conținut';
+            case 'img_alt_ratio_80':           return 'Atribute ALT pentru imagini (≥ 80% completate)';
+            case 'lazyload_images':            return 'Lazy-load activ pentru imagini';
+            case 'video_present':              return 'Video / iframe integrat în conținut';
+            case 'date_published':             return 'Dată de publicare vizibilă sau în schema';
+            case 'date_modified':              return 'Dată de actualizare vizibilă sau în schema';
             case 'author_visible_or_schema':   return 'Autor vizibil sau definit în schema';
 
             // Structură & Indexare
-            case 'indexable':                  return 'Pagina este indexabilă (fără noindex)';
-            case 'canonical_present':          return 'Canonical definit';
-            case 'canonical_valid':            return 'Canonical valid (self sau domeniu corect)';
-            case 'url_clean':                  return 'URL curat și scurt';
-            case 'internal_links_present':     return 'Linkuri interne către alte pagini';
+            case 'indexable':                  return 'Pagină indexabilă (fără noindex în meta robots)';
+            case 'canonical_present':          return 'Canonical prezent în pagină';
+            case 'canonical_valid':            return 'Canonical valid (self / domeniu corect)';
+            case 'url_clean':                  return 'URL curat, scurt și descriptiv';
+            case 'internal_links_present':     return 'Linkuri interne relevante în conținut/pagină';
             case 'external_links_present':     return 'Linkuri externe către surse de încredere';
 
-            // Meta & snippets
-            case 'title_length_ok':            return 'Title cu lungime optimă';
-            case 'meta_description_ok':        return 'Meta description cu lungime bună';
-            case 'og_minimal':                 return 'Open Graph complet (title/description/image/url)';
-            case 'twitter_card_large':         return 'Twitter Card (summary_large_image)';
-            case 'schema_article_recommended': return 'Schema „Article/BlogPosting” recomandată';
+            // Metadate & rich snippets
+            case 'title_length_ok':            return 'Titlu (title) cu lungime optimă';
+            case 'meta_description_ok':        return 'Meta description cu lungime optimă';
+            case 'og_minimal':                 return 'Open Graph complet (titlu, descriere, imagine, URL)';
+            case 'twitter_card_large':         return 'Twitter Card de tip summary_large_image';
+            case 'schema_article_recommended': return 'Schema Article / BlogPosting implementată';
 
-            // Localizare clasică (limbă)
-            case 'lang_ro':                    return 'Pagina este setată pe limba română (lang="ro")';
-            case 'og_locale_or_inLanguage_ro': return 'OG locale / inLanguage setate pe RO';
+            // Localizare RO (limbă)
+            case 'lang_ro':                    return 'Limbă setată pe română (lang="ro" / "ro-RO")';
+            case 'og_locale_or_inLanguage_ro': return 'Localizare „ro-RO” în OG sau inLanguage';
             case 'date_format_ro':             return 'Date afișate în format românesc';
-            case 'hreflang_pairs':             return 'Hreflang configurat';
+            case 'hreflang_pairs':             return 'Hreflang configurat pentru versiuni lingvistice';
 
             // SEO local extins
-            case 'local_tel_click':            return 'Telefon click-to-call';
-            case 'local_tel_prefix_local':     return 'Telefon cu prefix local românesc';
-            case 'local_address_visible':      return 'Adresă fizică vizibilă în pagină';
-            case 'local_directions_link':      return 'Link „Direcții” către hărți';
-            case 'local_opening_hours':        return 'Program/orar afișat sau în schema';
+            case 'local_tel_click':            return 'Telefon click-to-call (link tel:)';
+            case 'local_tel_prefix_local':     return 'Telefon cu prefix local românesc corect';
+            case 'local_address_visible':      return 'Adresă fizică clară și vizibilă în pagină';
+            case 'local_directions_link':      return 'Link „Direcții” către Google Maps / Waze';
+            case 'local_opening_hours':        return 'Program / orar afișat sau în schema';
             case 'local_schema_localbusiness': return 'Schema LocalBusiness implementată';
-            case 'local_schema_postal':        return 'Schema PostalAddress';
-            case 'local_schema_tel':           return 'Telefon definit în schema';
-            case 'local_schema_geo':           return 'Coordonate geografice în schema';
-            case 'local_schema_sameas':        return 'Legături spre profiluri / hartă (sameAs/hasMap)';
-            case 'local_schema_area':          return 'Arie deservită (areaServed/serviceArea)';
-            case 'local_schema_rating':        return 'Recenzii / note (aggregateRating)';
-            case 'local_city_detected':        return 'Orașul afacerii este recunoscut în pagină';
-            case 'local_city_in_title':        return 'Orașul apare în title';
-            case 'local_city_in_h1':           return 'Orașul apare în H1';
-            case 'local_city_in_slug':         return 'Orașul apare în URL';
-            case 'local_city_in_intro':        return 'Orașul apare în introducere';
-            case 'local_map_embed':            return 'Hartă embed (Google Maps)';
-            case 'local_alt_has_city':         return 'ALT imagini conține numele orașului';
-            case 'local_locator':              return 'Store locator / pagini pentru mai multe locații';
-            case 'local_whatsapp':             return 'WhatsApp click-to-chat';
+            case 'local_schema_postal':        return 'Schema PostalAddress completă';
+            case 'local_schema_tel':           return 'Telefon definit în schema LocalBusiness';
+            case 'local_schema_geo':           return 'Coordonate geografice (lat/long) în schema';
+            case 'local_schema_sameas':        return 'Legături sameAs / hasMap către profiluri și hartă';
+            case 'local_schema_area':          return 'Arie deservită (areaServed / serviceArea)';
+            case 'local_schema_rating':        return 'Recenzii și rating (aggregateRating / review)';
+            case 'local_city_detected':        return 'Orașul afacerii detectat în pagină';
+            case 'local_city_in_title':        return 'Orașul inclus în titlu (title)';
+            case 'local_city_in_h1':           return 'Orașul inclus în titlul principal (H1)';
+            case 'local_city_in_slug':         return 'Orașul inclus în URL / slug';
+            case 'local_city_in_intro':        return 'Orașul menționat în introducere';
+            case 'local_map_embed':            return 'Hartă embed (Google Maps) în pagină';
+            case 'local_alt_has_city':         return 'ALT imagini care includ numele orașului';
+            case 'local_locator':              return 'Store locator / pagini separate pentru locații';
+            case 'local_whatsapp':             return 'Buton WhatsApp click-to-chat';
 
             default:
                 return $id;
@@ -547,21 +630,52 @@ final class EmailRenderer
             if (!$localOnly && $isLocal) continue;
 
             $label = self::mapLabel($id);
+            $fullLabel = $label;
             if ($note) {
-                $label .= ' — '.$note;
+                $fullLabel .= ' — '.$note;
+            }
+
+            if ($ok) {
+                $badgeBg   = '#dcfce7';
+                $badgeText = '#166534';
+                $badgeLabel= 'OK';
+            } else {
+                $badgeBg   = '#fee2e2';
+                $badgeText = '#b91c1c';
+                $badgeLabel= 'Fix';
+            }
+
+            $tip = '';
+            if (class_exists('Advice')) {
+                try {
+                    $tip = \Advice::tip($id, (string)$note);
+                } catch (\Throwable $e) {
+                    $tip = '';
+                }
             }
 
             $rows[] = sprintf(
-                '<tr><td style="padding:2px 6px 2px 0;font-size:12px;width:16px;">%s</td><td style="padding:2px 0;font-size:12px;">%s</td></tr>',
-                $ok ? '✅' : '⚠️',
-                self::eHtml($label)
+                '<tr>
+                   <td style="padding:6px 8px 4px 0;font-size:11px;width:30px;white-space:nowrap;">
+                     <span style="display:inline-block;padding:3px 10px;border-radius:999px;background:%s;color:%s;font-size:10px;font-weight:600;text-transform:uppercase;">%s</span>
+                   </td>
+                   <td style="padding:6px 8px 4px 0;font-size:12px;color:#111827;">%s</td>
+                   <td style="padding:6px 0 4px 0;font-size:11px;color:#4b5563;">%s</td>
+                 </tr>',
+                $badgeBg,
+                $badgeText,
+                $badgeLabel,
+                self::eHtml($fullLabel),
+                $tip ? self::eHtml($tip) : '&nbsp;'
             );
         }
 
         if (!$rows) {
-            return '<div style="font-size:12px;color:#64748b;">Nicio verificare relevantă.</div>';
+            return '<div style="font-size:12px;color:#6b7280;">Nicio verificare relevantă pentru această secțiune.</div>';
         }
 
-        return '<table width="100%" cellpadding="0" cellspacing="0" role="presentation">'.implode('', $rows).'</table>';
+        return '<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;padding:6px 8px 4px 8px;">'
+            . implode('', $rows)
+            . '</table>';
     }
 }
