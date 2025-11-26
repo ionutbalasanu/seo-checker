@@ -560,7 +560,6 @@ final class EmailRenderer
             case 'images_in_body':             return 'Imagini relevante în conținut';
             case 'img_alt_ratio_80':           return 'Atribute ALT pentru imagini (≥ 80% completate)';
             case 'lazyload_images':            return 'Lazy-load activ pentru imagini';
-            case 'video_present':              return 'Video / iframe integrat în conținut';
             case 'date_published':             return 'Dată de publicare vizibilă sau în schema';
             case 'date_modified':              return 'Dată de actualizare vizibilă sau în schema';
             case 'author_visible_or_schema':   return 'Autor vizibil sau definit în schema';
@@ -572,13 +571,20 @@ final class EmailRenderer
             case 'url_clean':                  return 'URL curat, scurt și descriptiv';
             case 'internal_links_present':     return 'Linkuri interne relevante în conținut/pagină';
             case 'external_links_present':     return 'Linkuri externe către surse de încredere';
+            case 'meta_robots_ok':             return 'Meta robots configurat corect';
+            case 'html_valid':                 return 'HTML fără erori majore de structură';
+            case 'image_dimensions_defined':   return 'Imagini cu dimensiuni (width/height) definite';
+            case 'fonts_preload':              return 'Fonturi principale preîncărcate (preload)';
+            case 'cls_risky_elements':         return 'Elemente cu risc de CLS controlat';
 
             // Metadate & rich snippets
             case 'title_length_ok':            return 'Titlu (title) cu lungime optimă';
             case 'meta_description_ok':        return 'Meta description cu lungime optimă';
             case 'og_minimal':                 return 'Open Graph complet (titlu, descriere, imagine, URL)';
-            case 'twitter_card_large':         return 'Twitter Card de tip summary_large_image';
             case 'schema_article_recommended': return 'Schema Article / BlogPosting implementată';
+            case 'faq_schema_present':         return 'Schema FAQPage pentru întrebări frecvente';
+            case 'schema_breadcrumbs':         return 'Schema BreadcrumbList (firimituri)';
+            case 'schema_image_required_fields': return 'Imagini din schema cu width/height';
 
             // Localizare RO (limbă)
             case 'lang_ro':                    return 'Limbă setată pe română (lang="ro" / "ro-RO")';

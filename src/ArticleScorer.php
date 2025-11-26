@@ -26,7 +26,11 @@ if (!function_exists('array_is_list')) {
 
 final class ArticleScorer
 {
-    /** ponderea principală rămâne neschimbată (100 total) */
+    /**
+     * ponderea principală rămâne 100 total.
+     * NOU: twitter_card_large scos; +2 puncte mutate la schema_article_recommended.
+     * NOILE teste moderne au pondere 0 (informative, nu afectează scorul).
+     */
     private const W = [
         // Content & UX (40)
         'word_count_800' => 10,
@@ -37,7 +41,6 @@ final class ArticleScorer
         'images_in_body' => 3,
         'img_alt_ratio_80' => 3,
         'lazyload_images' => 2,
-        'video_present' => 2,
         'date_published' => 1,
         'date_modified' => 1,
         'author_visible_or_schema' => 4,
@@ -54,14 +57,23 @@ final class ArticleScorer
         'title_length_ok' => 6,
         'meta_description_ok' => 4,
         'og_minimal' => 4,
-        'twitter_card_large' => 2,
-        'schema_article_recommended' => 4,
+        'schema_article_recommended' => 6, // era 4, preia +2 de la twitter_card_large
 
-        // Localizare RO (15) — scorul rămâne 15
+        // Localizare RO (15)
         'lang_ro' => 6,
         'og_locale_or_inLanguage_ro' => 4,
         'date_format_ro' => 3,
         'hreflang_pairs' => 2,
+
+        // Verificări moderne adiționale (informative, weight = 0)
+        'faq_schema_present'           => 0,
+        'html_valid'                   => 0,
+        'meta_robots_ok'               => 0,
+        'image_dimensions_defined'     => 0,
+        'fonts_preload'                => 0,
+        'cls_risky_elements'           => 0,
+        'schema_breadcrumbs'           => 0,
+        'schema_image_required_fields' => 0,
     ];
 
     /**
@@ -93,43 +105,52 @@ final class ArticleScorer
     private const LOCAL_MAX = 30;
 
     /** listă urbană minimală; poți extinde din config */
-   private static function cityList(): array {
-    return [
-        'București',
-        'Cluj-Napoca',
-        'Timișoara',
-        'Iași',
-        'Constanța',
-        'Brașov',
-        'Sibiu',
-        'Arad',
-        'Oradea',
-        'Ploiești',
-        'Galați',
-        'Pitești',
-        'Târgu Mureș',
-        'Craiova',
-        'Baia Mare',
-        'Suceava',
-        'Buzău',
-    ];
-}
-private static function roNorm(string $s): string {
-    $s = mb_strtolower($s, 'UTF-8');
-    $s = strtr($s, [
-        'ă' => 'a', 'â' => 'a', 'î' => 'i',
-        'ș' => 's', 'ş' => 's',
-        'ț' => 't', 'ţ' => 't',
-    ]);
-    $s = str_replace(['-', '_'], ' ', $s);
-    return $s;
-}
+    private static function cityList(): array {
+        return [
+            'București',
+            'Cluj-Napoca',
+            'Timișoara',
+            'Iași',
+            'Constanța',
+            'Brașov',
+            'Sibiu',
+            'Arad',
+            'Oradea',
+            'Ploiești',
+            'Galați',
+            'Pitești',
+            'Târgu Mureș',
+            'Craiova',
+            'Baia Mare',
+            'Suceava',
+            'Buzău',
+        ];
+    }
+
+    private static function roNorm(string $s): string {
+        $s = mb_strtolower($s, 'UTF-8');
+        $s = strtr($s, [
+            'ă' => 'a', 'â' => 'a', 'î' => 'i',
+            'ș' => 's', 'ş' => 's',
+            'ț' => 't', 'ţ' => 't',
+        ]);
+        $s = str_replace(['-', '_'], ' ', $s);
+        return $s;
+    }
 
     public static function score(string $html, string $url, string $mode = 'deep', array $options = []): array
     {
         libxml_use_internal_errors(true);
+        libxml_clear_errors();
+
         $dom = new \DOMDocument();
         $dom->loadHTML($html, LIBXML_NOWARNING | LIBXML_NOERROR | LIBXML_NONET);
+
+        // erori libxml ≈ proxy de „HTML valid”
+        $libxmlErrors = libxml_get_errors();
+        libxml_clear_errors();
+        $htmlValid = count($libxmlErrors) < 10; // destul de tolerant
+
         $xp = new \DOMXPath($dom);
 
         $context        = (string)($options['context'] ?? 'article');   // 'article' sau 'local'
@@ -146,6 +167,7 @@ private static function roNorm(string $s): string {
         $h1s = self::all($xp, '//h1');
         $h1 = $h1s[0] ?? '';
         $robots = self::meta($xp, 'robots') ?? '';
+        $robotsLower = strtolower($robots);
         $canonical = self::attr($xp, '//link[@rel="canonical"]', 'href') ?? '';
         $lang = strtolower(self::attr($xp, '//html', 'lang') ?? '');
         $ogTitle = self::metaProp($xp, 'og:title');
@@ -153,10 +175,6 @@ private static function roNorm(string $s): string {
         $ogImage = self::metaProp($xp, 'og:image');
         $ogUrl = self::metaProp($xp, 'og:url');
         $ogLocale = strtolower(self::metaProp($xp, 'og:locale') ?? '');
-        $twCard = strtolower(self::metaProp($xp, 'twitter:card') ?? '');
-        $twTitle = self::metaProp($xp, 'twitter:title');
-        $twDesc = self::metaProp($xp, 'twitter:description');
-        $twImage = self::metaProp($xp, 'twitter:image');
 
         // ——— JSON-LD
         $jsonld = self::jsonLd($xp);
@@ -198,6 +216,18 @@ private static function roNorm(string $s): string {
             '//*[contains(@class,"entry-content")]//video|//*[contains(@class,"entry-content")]//iframe') > 0
         );
 
+        // imagini cu width/height (CLS)
+        $dimStats = self::imageDimensionsCoverage($xp);
+        $imageDimensionsDefined = $dimStats['total'] > 0
+            ? ($dimStats['with'] / max(1, $dimStats['total']) >= 0.8)
+            : true; // fără imagini => nu penalizăm
+
+        // fonts preload
+        $fontsPreload = self::hasPreloadFonts($xp);
+
+        // CLS „ok” dacă avem dimensiuni la imagini + (ideal) preload fonturi
+        $clsRiskOk = $imageDimensionsDefined && $fontsPreload;
+
         // ——— linkuri (profil sumar)
         $baseHost = self::normalizeHost(parse_url($canonical ?: $url, PHP_URL_HOST) ?? '');
         $linksContent = self::linksProfileContent($xp, $baseHost);
@@ -217,11 +247,16 @@ private static function roNorm(string $s): string {
         }
         $urlClean = self::urlCleanliness($canonical ?: $url);
 
+        // meta robots „ok” (fără noindex/none)
+        $metaRobotsOk = ($robots === '' ||
+            (strpos($robotsLower, 'noindex') === false && strpos($robotsLower, 'none') === false)
+        );
+
         // ——— metadate
         $titleLenOk = (mb_strlen($title) >= 35 && mb_strlen($title) <= 65);
         $descLenOk  = (mb_strlen($metaDesc) >= 120 && mb_strlen($metaDesc) <= 170);
         $ogMinimal  = (bool)($ogTitle && $ogDesc && $ogImage && ($ogUrl ?: $canonical ?: $url));
-        $twLarge    = ($twCard === 'summary_large_image' && ($twTitle || $ogTitle) && ($twDesc || $ogDesc) && ($twImage || $ogImage));
+
         $schemaRecommended = false;
         if ($articleSchemas) {
             foreach ($articleSchemas as $j) {
@@ -229,6 +264,19 @@ private static function roNorm(string $s): string {
                 $schemaRecommended = $schemaRecommended || $ok;
             }
         }
+
+        // JSON-LD extra: FAQ, breadcrumbs, imagini cu width/height în schema
+        $faqSchemaPresent = false;
+        $breadcrumbsSchema = false;
+        foreach ($jsonld as $j) {
+            if (self::hasType($j, ['FAQPage'])) {
+                $faqSchemaPresent = true;
+            }
+            if (self::hasType($j, ['BreadcrumbList'])) {
+                $breadcrumbsSchema = true;
+            }
+        }
+        $schemaImagesOk = self::schemaImagesHaveSize($articleSchemas);
 
         // ——— Localizare clasică
         $isLangRo = (strncmp($lang, 'ro', 2) === 0);
@@ -255,14 +303,14 @@ private static function roNorm(string $s): string {
         $telHref = '';
         if ($hasTelClick) $telHref = (string)$xp->query('//a[starts-with(@href,"tel:")]')->item(0)->getAttribute('href');
         $telDigits = preg_replace('~\D+~','', $telHref);
-$hasLocalPrefix = false;
+        $hasLocalPrefix = false;
 
-if ($telDigits !== '') {
-    // Acceptă numere românești cu prefix 0 / 40 / 0040 și cod 2x, 3x sau 7x (mobil)
-    if (preg_match('~^(?:0|40|0040)?(2\d|3\d|7\d)~', $telDigits)) {
-        $hasLocalPrefix = true;
-    }
-}
+        if ($telDigits !== '') {
+            // Acceptă numere românești cu prefix 0 / 40 / 0040 și cod 2x, 3x sau 7x (mobil)
+            if (preg_match('~^(?:0|40|0040)?(2\d|3\d|7\d)~', $telDigits)) {
+                $hasLocalPrefix = true;
+            }
+        }
 
         $hasAddressVisible = $xp->query('//address|//*[@itemprop="address"]|//*[contains(translate(@class,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"address")]')->length > 0;
         $hasDirections = $xp->query('//a[contains(@href,"google.com/maps") or contains(@href,"g.page/") or contains(@href,"maps.app.goo.gl") or contains(@href,"waze.com/ul") or contains(@href,"apple.com/maps")]')->length > 0;
@@ -275,7 +323,6 @@ if ($telDigits !== '') {
         $whatsapp = $xp->query('//a[contains(@href,"wa.me/") or contains(@href,"api.whatsapp.com/send")]')->length > 0;
 
         // oraș detectat
-         // oraș detectat (diacritice-safe)
         $cities = self::cityList();
 
         $urlPath   = parse_url($url, PHP_URL_PATH) ?? '';
@@ -306,7 +353,7 @@ if ($telDigits !== '') {
 
         $cityInTitle = $cityNorm ? str_contains($TNorm, $cityNorm) : false;
         $cityInH1    = $cityNorm ? str_contains($HNorm, $cityNorm) : false;
-        $cityInSlug = $cityNorm ? str_contains($uNorm, $cityNorm) : false;
+        $cityInSlug  = $cityNorm ? str_contains($uNorm, $cityNorm) : false;
         $cityInIntro = $cityNorm ? str_contains($introNorm, $cityNorm) : false;
 
         // ALT cu numele orașului (tot diacritice-safe, și ignoră imaginile decorative)
@@ -329,7 +376,6 @@ if ($telDigits !== '') {
             }
         }
 
-
         // locator/multi-locații
         $hasLocator = $xp->query('//*[contains(translate(@class,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"locations") or contains(translate(@class,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"store")]//a[@href]')->length >= 2;
 
@@ -344,7 +390,6 @@ if ($telDigits !== '') {
             'images_in_body' => ($bodyImgCount >= 1),
             'img_alt_ratio_80' => ($altRatio >= 0.8),
             'lazyload_images' => ($lazyCount >= max(1, $imgsTotal > 2 ? 1 : 0)),
-            'video_present' => $hasVideo,
             'date_published' => (bool)$datePub,
             'date_modified' => (bool)$dateMod,
             'author_visible_or_schema' => $authorOk,
@@ -354,16 +399,22 @@ if ($telDigits !== '') {
             'canonical_present' => $canonicalPresent,
             'canonical_valid' => $canonicalPresent && $canonicalValid,
             'url_clean' => $urlClean['ok'],
-            // relaxăm: acceptăm link intern/extern oriunde pe pagină, nu doar în corp
             'internal_links_present' => ($linksContent['internal'] >= 1 || $linksPage['internal'] >= 1),
             'external_links_present' => ($linksContent['external'] >= 1 || $linksPage['external'] >= 1),
+            'meta_robots_ok' => $metaRobotsOk,
+            'html_valid' => $htmlValid,
+            'image_dimensions_defined' => $imageDimensionsDefined,
+            'fonts_preload' => $fontsPreload,
+            'cls_risky_elements' => $clsRiskOk,
 
             // Metadate
             'title_length_ok' => $titleLenOk,
             'meta_description_ok' => $descLenOk,
             'og_minimal' => $ogMinimal,
-            'twitter_card_large' => $twLarge,
             'schema_article_recommended' => $schemaRecommended,
+            'faq_schema_present' => $faqSchemaPresent,
+            'schema_breadcrumbs' => $breadcrumbsSchema,
+            'schema_image_required_fields' => $schemaImagesOk,
 
             // Localizare clasică (scor)
             'lang_ro' => $isLangRo,
@@ -398,12 +449,19 @@ if ($telDigits !== '') {
                 case 'url_clean': $note = $urlClean['note']; break;
                 case 'internal_links_present': $note = $linksContent['internal'].' interne în articol (total pagină '.$linksPage['internal'].')'; break;
                 case 'external_links_present': $note = $linksContent['external'].' externe în articol (total pagină '.$linksPage['external'].')'; break;
+                case 'meta_robots_ok': $note = $robots ?: '—'; break;
+                case 'html_valid': $note = $htmlValid ? 'OK' : 'erori parser HTML'; break;
+                case 'image_dimensions_defined': $note = $dimStats['total'] ? ($dimStats['with'].'/'.$dimStats['total'].' imagini cu dimensiuni') : 'fără imagini'; break;
+                case 'fonts_preload': $note = $fontsPreload ? 'link preload font' : '—'; break;
+                case 'cls_risky_elements': $note = $clsRiskOk ? 'dimensiuni imagini/fonturi critice OK' : 'posibil risc CLS'; break;
 
                 case 'title_length_ok': $note = mb_strlen($title).' caractere'; break;
                 case 'meta_description_ok': $note = mb_strlen($metaDesc).' caractere'; break;
                 case 'og_minimal': $note = $ogMinimal ? 'og:title/desc/img/url' : 'incomplet'; break;
-                case 'twitter_card_large': $note = $twCard ?: '—'; break;
                 case 'schema_article_recommended': $note = $schemaRecommended ? 'OK' : 'lipsește'; break;
+                case 'faq_schema_present': $note = $faqSchemaPresent ? 'FAQPage' : '—'; break;
+                case 'schema_breadcrumbs': $note = $breadcrumbsSchema ? 'BreadcrumbList' : '—'; break;
+                case 'schema_image_required_fields': $note = $schemaImagesOk ? 'image width/height în schema' : '—'; break;
 
                 case 'lang_ro': $note = $lang ?: '—'; break;
                 case 'og_locale_or_inLanguage_ro': $note = $ogLocale ?: ($inLanguage ?: '—'); break;
@@ -413,11 +471,24 @@ if ($telDigits !== '') {
 
             $checks[] = ['id'=>$id,'ok'=>$ok,'note'=>$note];
 
-            if (in_array($id,['word_count_800','intro_mentions_topic','h1_single','headings_hierarchy','lists_tables','images_in_body','img_alt_ratio_80','lazyload_images','video_present','date_published','date_modified','author_visible_or_schema'],true)) {
+            if (in_array($id,[
+                'word_count_800','intro_mentions_topic','h1_single','headings_hierarchy',
+                'lists_tables','images_in_body','img_alt_ratio_80','lazyload_images',
+                'date_published','date_modified','author_visible_or_schema'
+            ],true)) {
                 $content += $ok ? $weight : 0;
-            } elseif (in_array($id,['indexable','canonical_present','canonical_valid','url_clean','internal_links_present','external_links_present'],true)) {
+            } elseif (in_array($id,[
+                'indexable','canonical_present','canonical_valid','url_clean',
+                'internal_links_present','external_links_present',
+                'meta_robots_ok','html_valid','image_dimensions_defined',
+                'fonts_preload','cls_risky_elements'
+            ],true)) {
                 $structure += $ok ? $weight : 0;
-            } elseif (in_array($id,['title_length_ok','meta_description_ok','og_minimal','twitter_card_large','schema_article_recommended'],true)) {
+            } elseif (in_array($id,[
+                'title_length_ok','meta_description_ok','og_minimal',
+                'schema_article_recommended','faq_schema_present',
+                'schema_breadcrumbs','schema_image_required_fields'
+            ],true)) {
                 $signals += $ok ? $weight : 0;
             } else {
                 $locale += $ok ? $weight : 0;
@@ -506,7 +577,7 @@ if ($telDigits !== '') {
                 'datePublished' => $datePub ?: null,
                 'dateModified' => $dateMod ?: null,
                 'og' => ['title'=>$ogTitle,'description'=>$ogDesc,'image'=>$ogImage,'url'=>$ogUrl],
-                'twitter' => ['card'=>$twCard,'title'=>$twTitle,'description'=>$twDesc,'image'=>$twImage],
+                'twitter' => ['card'=>null,'title'=>null,'description'=>null,'image'=>null], // lăsat neutru
                 'links' => [
                     'content' => [
                         'internal' => array_slice($linksContent['list_internal'], 0, 50),
@@ -524,24 +595,24 @@ if ($telDigits !== '') {
     }
 
     /* ================= helpers generale ================= */
-   private static function getVisibleText(\DOMDocument $dom): string {
-    // NU mai ștergem <script> și <style>, ca să rămână JSON-LD în DOM.
-    $xp = new \DOMXPath($dom);
+    private static function getVisibleText(\DOMDocument $dom): string {
+        // NU mai ștergem <script> și <style>, ca să rămână JSON-LD în DOM.
+        $xp = new \DOMXPath($dom);
 
-    // Luăm toate nodurile text care NU sunt în <script> sau <style>
-    $nodes = $xp->query('//text()[not(ancestor::script) and not(ancestor::style)]');
-    if ($nodes === false) {
-        return '';
+        // Luăm toate nodurile text care NU sunt în <script> sau <style>
+        $nodes = $xp->query('//text()[not(ancestor::script) and not(ancestor::style)]');
+        if ($nodes === false) {
+            return '';
+        }
+
+        $chunks = [];
+        foreach ($nodes as $n) {
+            $chunks[] = $n->nodeValue;
+        }
+
+        $text = implode(' ', $chunks);
+        return trim(preg_replace('/\s+/u', ' ', $text));
     }
-
-    $chunks = [];
-    foreach ($nodes as $n) {
-        $chunks[] = $n->nodeValue;
-    }
-
-    $text = implode(' ', $chunks);
-    return trim(preg_replace('/\s+/u', ' ', $text));
-}
 
     private static function wordCount(string $t): int {
         $t = trim($t); return $t === '' ? 0 : count(preg_split('/\s+/u',$t));
@@ -565,38 +636,37 @@ if ($telDigits !== '') {
         $n = $xp->query($q)->item(0); return $n ? trim((string)$n->getAttribute($attr)) : null;
     }
     private static function jsonLd(\DOMXPath $xp): array {
-    $list = [];
-    // înainte era: //script[@type="application/ld+json"]
-    $nodes = $xp->query(
-        '//script[contains(translate(@type,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"ld+json")]'
-    );
+        $list = [];
+        $nodes = $xp->query(
+            '//script[contains(translate(@type,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"ld+json")]'
+        );
 
-    foreach ($nodes as $s) {
-        $txt = trim($s->textContent ?? '');
-        if ($txt === '') continue;
+        foreach ($nodes as $s) {
+            $txt = trim($s->textContent ?? '');
+            if ($txt === '') continue;
 
-        $j = json_decode($txt, true);
-        if (!$j) continue;
+            $j = json_decode($txt, true);
+            if (!$j) continue;
 
-        $objs = (is_array($j) && array_is_list($j)) ? $j : [$j];
+            $objs = (is_array($j) && array_is_list($j)) ? $j : [$j];
 
-        foreach ($objs as $obj) {
-            if (!is_array($obj)) continue;
+            foreach ($objs as $obj) {
+                if (!is_array($obj)) continue;
 
-            if (isset($obj['@graph']) && is_array($obj['@graph'])) {
-                foreach ($obj['@graph'] as $g) {
-                    if (is_array($g)) {
-                        $list[] = $g;
+                if (isset($obj['@graph']) && is_array($obj['@graph'])) {
+                    foreach ($obj['@graph'] as $g) {
+                        if (is_array($g)) {
+                            $list[] = $g;
+                        }
                     }
+                } else {
+                    $list[] = $obj;
                 }
-            } else {
-                $list[] = $obj;
             }
         }
-    }
 
-    return $list;
-}
+        return $list;
+    }
     private static function hasType(array $j, array $types): bool {
         $t = $j['@type'] ?? null; $arr = is_array($t) ? $t : [$t];
         $low = array_map(fn($x)=>strtolower((string)$x), $arr);
@@ -638,63 +708,63 @@ if ($telDigits !== '') {
     }
 
     /* ============== LOCAL helpers ============== */
- /** orice obiect JSON-LD care are @type LocalBusiness (sau rude) */
-private static function localBusinessSchemas(array $jsonld): array
-{
-    $out = [];
+    /** orice obiect JSON-LD care are @type LocalBusiness (sau rude) */
+    private static function localBusinessSchemas(array $jsonld): array
+    {
+        $out = [];
 
-    $localTypes = [
-        'localbusiness',
-        'store',
-        'medicalbusiness',
-        'automotivebusiness',
-        'restaurant',
-        'hotel',
-        'healthandbeautybusiness',
-        'professionalservice',
-        'dentist',
-        'autorepair',
-    ];
+        $localTypes = [
+            'localbusiness',
+            'store',
+            'medicalbusiness',
+            'automotivebusiness',
+            'restaurant',
+            'hotel',
+            'healthandbeautybusiness',
+            'professionalservice',
+            'dentist',
+            'autorepair',
+        ];
 
-    foreach ($jsonld as $j) {
-        if (!is_array($j)) {
-            continue;
-        }
-
-        // @type poate fi string sau array
-        if (isset($j['@type'])) {
-            $types = (array)$j['@type'];
-            $types = array_map(
-                fn($t) => strtolower(trim((string)$t)),
-                $types
-            );
-
-            if (count(array_intersect($types, $localTypes)) > 0) {
-                $out[] = $j;
+        foreach ($jsonld as $j) {
+            if (!is_array($j)) {
                 continue;
             }
-        }
 
-        // fallback: uneori LocalBusiness e "îngropat" într-un @graph intern
-        if (isset($j['@graph']) && is_array($j['@graph'])) {
-            foreach ($j['@graph'] as $g) {
-                if (!is_array($g) || empty($g['@type'])) {
-                    continue;
-                }
-                $types = (array)$g['@type'];
+            // @type poate fi string sau array
+            if (isset($j['@type'])) {
+                $types = (array)$j['@type'];
                 $types = array_map(
                     fn($t) => strtolower(trim((string)$t)),
                     $types
                 );
+
                 if (count(array_intersect($types, $localTypes)) > 0) {
-                    $out[] = $g;
+                    $out[] = $j;
+                    continue;
+                }
+            }
+
+            // fallback: uneori LocalBusiness e "îngropat" într-un @graph intern
+            if (isset($j['@graph']) && is_array($j['@graph'])) {
+                foreach ($j['@graph'] as $g) {
+                    if (!is_array($g) || empty($g['@type'])) {
+                        continue;
+                    }
+                    $types = (array)$g['@type'];
+                    $types = array_map(
+                        fn($t) => strtolower(trim((string)$t)),
+                        $types
+                    );
+                    if (count(array_intersect($types, $localTypes)) > 0) {
+                        $out[] = $g;
+                    }
                 }
             }
         }
-    }
 
-    return $out;
-}
+        return $out;
+    }
 
     private static function postalAddressOf(array $schema): ?array {
         $addr = $schema['address'] ?? null;
@@ -888,6 +958,27 @@ private static function localBusinessSchemas(array $jsonld): array
         return $c;
     }
 
+    /**
+     * Statistici imagini cu dimensiuni definite (width+height)
+     * @return array{total:int,with:int}
+     */
+    private static function imageDimensionsCoverage(\DOMXPath $xp): array {
+        $nodes = $xp->query('//img');
+        $total = 0;
+        $with  = 0;
+        foreach ($nodes as $img) {
+            if (!($img instanceof \DOMElement)) continue;
+            if (self::isDecorative($img) || !self::isRealImage($img)) continue;
+            $total++;
+            $w = trim((string)$img->getAttribute('width'));
+            $h = trim((string)$img->getAttribute('height'));
+            if ($w !== '' && $h !== '') {
+                $with++;
+            }
+        }
+        return ['total'=>$total,'with'=>$with];
+    }
+
     /* ===== locale/url ===== */
     private static function hreflangPairs(\DOMXPath $xp): bool {
         $nodes=$xp->query('//link[@rel="alternate" and @hreflang and @href]');
@@ -918,6 +1009,47 @@ private static function localBusinessSchemas(array $jsonld): array
         if ($ok) $note='/'.$slug.'/';
         return ['ok'=>$ok,'note'=>$note];
     }
+
+    /**
+     * Detectează link rel="preload" as="font"
+     */
+    private static function hasPreloadFonts(\DOMXPath $xp): bool {
+        $nodes = $xp->query('//link[@rel="preload" and translate(@as,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")="font"]');
+        return $nodes !== false && $nodes->length > 0;
+    }
+
+    /**
+     * Verifică dacă imaginile din schema Article/BlogPosting au width/height.
+     */
+    private static function schemaImagesHaveSize(array $articleSchemas): bool {
+        foreach ($articleSchemas as $j) {
+            if (empty($j['image'])) {
+                continue;
+            }
+            $imgField = $j['image'];
+            $imgs = [];
+            if (is_string($imgField)) {
+                // nu avem width/height aici
+                continue;
+            } elseif (is_array($imgField)) {
+                if (array_is_list($imgField)) {
+                    $imgs = $imgField;
+                } else {
+                    $imgs = [$imgField];
+                }
+            }
+            foreach ($imgs as $img) {
+                if (!is_array($img)) continue;
+                $w = $img['width']  ?? null;
+                $h = $img['height'] ?? null;
+                if ($w && $h) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static function mainTerm(string $s): ?string {
         $s = mb_strtolower($s,'UTF-8');
         $s = preg_replace('/[^a-z0-9ăâîșşșțţ ]/iu',' ',$s);
